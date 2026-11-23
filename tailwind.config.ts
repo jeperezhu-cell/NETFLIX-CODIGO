@@ -14,11 +14,13 @@ const config: Config = {
         popIn: { from: { opacity: "0", transform: "scale(.94) translateY(8px)" }, to: { opacity: "1", transform: "none" } },
         shake: { "0%,100%": { transform: "translateX(0)" }, "25%": { transform: "translateX(-10px)" }, "75%": { transform: "translateX(10px)" } },
         slideDown: { from: { opacity: "0", transform: "translateY(-24px)" }, to: { opacity: "1", transform: "none" } },
+        shimmer: { to: { transform: "translateX(100%)" } },
+        floaty: { "0%,100%": { transform: "translateY(0)" }, "50%": { transform: "translateY(-6px)" } },
         pulseRing: { "0%": { boxShadow: "0 0 0 0 rgba(225,6,19,.6)" }, "100%": { boxShadow: "0 0 0 14px rgba(225,6,19,0)" } }
       },
       animation: {
         "spin-slow": "spinSlow 90s linear infinite", "pop-in": "popIn .45s cubic-bezier(.2,.8,.2,1) both",
-        shake: "shake .4s", "slide-down": "slideDown .4s ease-out both", "pulse-ring": "pulseRing 1.8s infinite"
+        shake: "shake .4s", "slide-down": "slideDown .4s ease-out both", "pulse-ring": "pulseRing 1.8s infinite", floaty: "floaty 4s ease-in-out infinite"
       }
     }
   },

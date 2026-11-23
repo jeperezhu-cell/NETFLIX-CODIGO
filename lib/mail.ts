@@ -66,10 +66,14 @@ export async function findForAccount(accountEmail: string, key: string): Promise
   try {
     const uids = await c.search({ since: new Date(since.getTime() - 86_400_000) }, { uid: true });
     if (!uids || uids.length === 0) return { type: "none" };
+    // 1) Solo fechas (liviano) → 2) descargar únicamente los correos recientes. Así rinde con muchas cuentas.
+    const recent: number[] = [];
+    for await (const m of c.fetch(uids.slice(-300), { internalDate: true, uid: true }, { uid: true }))
+      if (new Date(m.internalDate as Date) >= since) recent.push(m.uid);
+    if (recent.length === 0) return { type: "none" };
     const msgs: { at: Date; source: Buffer }[] = [];
-    for await (const m of c.fetch(uids.slice(-50), { source: true, internalDate: true }, { uid: true })) {
-      const at = new Date(m.internalDate as Date);
-      if (at >= since && m.source) msgs.push({ at, source: m.source });
+    for await (const m of c.fetch(recent.slice(-80), { source: true, internalDate: true }, { uid: true })) {
+      if (m.source) msgs.push({ at: new Date(m.internalDate as Date), source: m.source });
     }
     msgs.sort((a, b) => b.at.getTime() - a.at.getTime());
     for (const m of msgs) {

@@ -1,18 +1,19 @@
 "use client";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogIn, ArrowLeft, Lock, LogOut } from "lucide-react";
+import { LogIn, ArrowLeft, Lock, LogOut, Plus, Ban } from "lucide-react";
 import Avatar from "./Avatar";
 import Sharingan from "./Sharingan";
 
-type P = { id: string; profile_name: string; avatar_key: string; avatar_url: string | null };
+type P = { id: string; profile_name: string; avatar_key: string; avatar_url: string | null; status?: string };
 const post = (url: string, body: object) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
 
-export default function ClientFlow({ token, label, initialStage, initialProfiles }:
-  { token: string; label: string; initialStage: "login" | "choose"; initialProfiles: P[] }) {
+export default function ClientFlow({ token, label, initialStage, initialProfiles, maxProfiles = 5 }:
+  { token: string; label: string; initialStage: "login" | "choose"; initialProfiles: P[]; maxProfiles?: number }) {
   const router = useRouter();
   const [stage, setStage] = useState<"login" | "choose" | "pin">(initialStage);
   const [profiles, setProfiles] = useState<P[]>(initialProfiles);
+  const [max, setMax] = useState(maxProfiles);
   const [sel, setSel] = useState<P | null>(null);
   const [pin, setPin] = useState(""); const [shake, setShake] = useState(false);
   const [err, setErr] = useState(""); const [busy, setBusy] = useState(false);
@@ -20,54 +21,73 @@ export default function ClientFlow({ token, label, initialStage, initialProfiles
 
   async function login(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault(); setBusy(true); setErr("");
-    const f = new FormData(e.currentTarget);
-    const r = await post(`/api/c/${token}/login`, { name: f.get("name"), password: f.get("password") });
-    const j = await r.json(); setBusy(false);
-    if (!r.ok) return setErr(j.error);
-    setProfiles(j.profiles); setStage("choose");
+    try {
+      const f = new FormData(e.currentTarget);
+      const r = await post(`/api/c/${token}/login`, { name: f.get("name"), password: f.get("password") });
+      const j = await r.json();
+      if (!r.ok) return setErr(j.error);
+      setProfiles(j.profiles); setMax(j.maxProfiles ?? 5); setStage("choose");
+    } catch { setErr("Sin conexión. Intenta de nuevo."); } finally { setBusy(false); }
   }
   async function verify(code: string) {
     if (!sel) return; setBusy(true); setErr("");
-    const r = await post(`/api/c/${token}/pin`, { profileId: sel.id, pin: code });
-    if (!r.ok) {
-      const j = await r.json(); setBusy(false); setErr(j.error); setPin(""); setShake(true); setTimeout(() => setShake(false), 450); ref.current?.focus(); return;
-    }
-    router.push(`/c/${token}/panel`);
+    try {
+      const r = await post(`/api/c/${token}/pin`, { profileId: sel.id, pin: code });
+      if (!r.ok) {
+        const j = await r.json(); setErr(j.error); setPin(""); setShake(true); setTimeout(() => setShake(false), 450); ref.current?.focus(); return;
+      }
+      router.push(`/c/${token}/panel`);
+    } catch { setErr("Sin conexión. Intenta de nuevo."); } finally { setBusy(false); }
   }
   async function exit() { await post(`/api/c/${token}/logout`, {}); setStage("login"); setProfiles([]); setSel(null); }
+  const free = Math.max(0, max - profiles.length);
 
   return (
-    <main className="flex min-h-screen items-center justify-center px-5 py-10">
-      <div className="w-full max-w-2xl text-center">
-        <div className="mx-auto mb-2 flex w-fit items-center gap-2 rounded-full border border-white/10 bg-black/40 px-4 py-1.5 text-xs tracking-widest text-white/70">
+    <main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col items-center px-4 pb-12 pt-4 md:pt-6">
+      {/* Portada oficial (public/image.png) */}
+      <div className="relative w-full overflow-hidden rounded-3xl border border-blood/30 bg-black shadow-glow">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/image.png" alt="ITACHI PERÚ" className="mx-auto block h-auto max-h-[42vh] w-full object-cover object-center md:max-h-[52vh]" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-ink to-transparent" />
+        <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/15 bg-black/60 px-4 py-1.5 text-xs font-semibold tracking-widest text-white/80 backdrop-blur">
           <Sharingan className="h-4 w-4 animate-spin-slow" />ITACHI PERÚ · {label}
         </div>
+      </div>
 
+      <div className="w-full max-w-3xl text-center">
         {stage === "login" && (
-          <form onSubmit={login} className="panel animate-pop-in mx-auto mt-6 max-w-md space-y-4 p-8 text-left">
-            <Sharingan className="mx-auto h-20 w-20 animate-spin-slow drop-shadow-[0_0_24px_rgba(225,6,19,.6)]" />
+          <form onSubmit={login} className="panel animate-pop-in mx-auto mt-8 max-w-md space-y-4 p-8 text-left">
             <h1 className="title text-center text-3xl">Iniciar sesión</h1>
+            <p className="text-center text-sm text-white/55">Escribe los datos que te dio la administración.</p>
             <input name="name" className="field" placeholder="Tu nombre" autoComplete="username" required />
             <input name="password" type="password" className="field" placeholder="Tu contraseña" autoComplete="current-password" required />
             {err && <p role="alert" className="rounded-lg bg-blood/15 px-3 py-2 text-sm text-blood-glow">{err}</p>}
-            <button className="btn w-full" disabled={busy}><LogIn size={18} />{busy ? "Verificando…" : "Continuar"}</button>
+            <button className="btn w-full !py-3.5" disabled={busy}><LogIn size={18} />{busy ? "Verificando…" : "Continuar"}</button>
           </form>
         )}
 
         {stage === "choose" && (
           <div className="animate-pop-in mt-8">
             <h1 className="title text-4xl md:text-5xl">¿Quién va a entrar?</h1>
-            <div className="mt-12 flex flex-wrap justify-center gap-10">
+            <p className="mt-2 text-sm text-white/50">Elige tu perfil e ingresa tu PIN</p>
+            <div className="mt-10 grid grid-cols-2 gap-x-4 gap-y-8 sm:grid-cols-3 md:grid-cols-5">
               {profiles.map((p) => (
-                <button key={p.id} onClick={() => { setSel(p); setErr(""); setPin(""); setStage("pin"); }} className="group flex flex-col items-center gap-4 focus-visible:outline-none">
-                  <span className="rounded-xl ring-4 ring-transparent transition duration-300 group-hover:-translate-y-1 group-hover:scale-105 group-hover:shadow-glow group-hover:ring-white group-focus-visible:ring-white">
-                    <Avatar k={p.avatar_key} url={p.avatar_url} size={140} />
+                <button key={p.id} onClick={() => { setSel(p); setErr(""); setPin(""); setStage("pin"); }} className="group flex flex-col items-center gap-3 focus-visible:outline-none">
+                  <span className="relative rounded-xl ring-4 ring-transparent transition duration-300 group-hover:-translate-y-1 group-hover:scale-105 group-hover:shadow-glow group-hover:ring-white group-focus-visible:ring-white">
+                    <Avatar k={p.avatar_key} url={p.avatar_url} size={112} />
+                    {p.status === "suspended" && <span className="absolute inset-0 grid place-items-center rounded-md bg-black/65"><Ban size={30} className="text-blood-glow" /></span>}
                   </span>
-                  <span className="text-xl text-white/60 transition group-hover:text-white">{p.profile_name}</span>
+                  <span className="max-w-full truncate text-lg text-white/65 transition group-hover:text-white">{p.profile_name}</span>
                 </button>
               ))}
+              {Array.from({ length: free }).map((_, i) => (
+                <div key={`free-${i}`} className="flex flex-col items-center gap-3 opacity-40" aria-label="Perfil disponible">
+                  <span className="grid h-28 w-28 place-items-center rounded-xl border-2 border-dashed border-white/25 text-white/50"><Plus size={34} /></span>
+                  <span className="text-lg text-white/50">+{i + 1}</span>
+                </div>
+              ))}
             </div>
-            <button onClick={exit} className="btn-ghost mt-14"><LogOut size={16} />Salir</button>
+            <button onClick={exit} className="btn-ghost mt-12"><LogOut size={16} />Salir</button>
           </div>
         )}
 

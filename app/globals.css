@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 :root { color-scheme: dark; }
-html { background: #050404; color: #f3efec; }
+html { background: radial-gradient(1200px 600px at 50% -10%, #2b0509 0%, #050404 60%) fixed, #050404; color: #f3efec; }
 body { font-family: var(--font-body), system-ui, sans-serif; -webkit-font-smoothing: antialiased; min-height: 100vh; }
 ::selection { background: #e10613; color: #fff; }
 ::-webkit-scrollbar { width: 10px; height: 10px; } ::-webkit-scrollbar-thumb { background: #3a1a1e; border-radius: 8px; }
@@ -16,5 +16,9 @@ body { font-family: var(--font-body), system-ui, sans-serif; -webkit-font-smooth
   .btn-ghost { @apply inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-bone transition hover:border-blood/60 hover:bg-white/10 hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-white disabled:opacity-40; }
   .chip { @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold; }
   .title { @apply font-display font-extrabold tracking-tight; }
+  .btn::after { content: ""; @apply pointer-events-none absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white/25 to-transparent; }
+  .btn { @apply relative overflow-hidden; }
+  .btn:hover::after { animation: shimmer .9s ease; }
+  .glow-text { text-shadow: 0 0 28px rgba(225, 6, 19, .55); }
 }
 @media (prefers-reduced-motion: reduce) { *, ::before, ::after { animation: none !important; transition: none !important; } }

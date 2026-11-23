@@ -11,7 +11,7 @@ import ActionButtons from "@/components/ActionButtons";
 import LogoutButton from "@/components/LogoutButton";
 import PushToggle from "@/components/PushToggle";
 import Sharingan from "@/components/Sharingan";
-import { Download, Bell, Wallet, Megaphone, FileText, CalendarClock, KeyRound, Zap } from "lucide-react";
+import { Download, Bell, Wallet, Megaphone, FileText, CalendarClock, KeyRound, Zap, MessageCircle } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -25,9 +25,9 @@ export default async function Panel({ params }: { params: Promise<{ token: strin
     from profiles pr join service_accounts a on a.id = pr.account_id
     where pr.id = ${s.profileId} and a.id = ${s.accountId} and a.access_token = ${token}`;
   if (!r) notFound();
+  const RENEW = await getRenew();
 
   if (r.status !== "active" || r.acc_status !== "active") {
-    const RENEW = await getRenew();
     return (
       <main className="grid min-h-screen place-items-center px-5 text-center">
         <div className="panel animate-pop-in max-w-lg space-y-5 border-blood/50 p-9 shadow-glow">
@@ -51,7 +51,14 @@ export default async function Panel({ params }: { params: Promise<{ token: strin
   const dLabel = d === null ? "" : d < 0 ? `Venció hace ${-d} día${d === -1 ? "" : "s"}` : d === 0 ? "Vence hoy" : `Vence en ${d} día${d === 1 ? "" : "s"}`;
 
   return (
-    <main className="mx-auto max-w-3xl space-y-6 px-4 py-8 md:py-12">
+    <main className="mx-auto max-w-3xl space-y-6 px-4 py-4 md:py-8">
+      {/* Portada oficial (public/image.png) */}
+      <div className="relative overflow-hidden rounded-3xl border border-blood/30 bg-black shadow-glow">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/image.png" alt="ITACHI PERÚ" className="block h-auto max-h-56 w-full object-cover object-center md:max-h-72" />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-ink/90 to-transparent" />
+      </div>
+
       <section className="panel animate-pop-in relative overflow-hidden p-6">
         <Sharingan className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 animate-spin-slow opacity-[0.07]" />
         <div className="relative flex flex-wrap items-center gap-5">
@@ -98,6 +105,9 @@ export default async function Panel({ params }: { params: Promise<{ token: strin
               </li>);
           })}</ul>}
       </section>
+
+      <a href={`https://wa.me/${RENEW.phone}?text=${encodeURIComponent("Hola, necesito ayuda con mi cuenta.")}`} target="_blank" rel="noopener noreferrer"
+        className="btn-ghost w-full !py-3.5 text-base"><MessageCircle size={18} className="text-emerald-400" />¿Necesitas ayuda? Escríbenos por WhatsApp</a>
 
       {receipts.length > 0 && (
         <section className="panel space-y-3 p-5">
