@@ -4,7 +4,8 @@ const nextConfig = {
   // Navegador headless para el botón "Actualizar hogar" (corre en el servidor, el cliente no ve nada)
   serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
   outputFileTracingIncludes: {
-    "/api/c/[token]/household": ["./node_modules/@sparticuz/chromium/bin/**"]
+    "/api/c/*/household": ["./node_modules/@sparticuz/chromium/bin/**"],
+    "/api/c/*/household/route": ["./node_modules/@sparticuz/chromium/bin/**"]
   },
   async headers() {
     return [{

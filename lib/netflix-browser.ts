@@ -53,15 +53,18 @@ function codeFrom(text: string) {
 export async function openNetflixLink(url: string, mode: LinkMode): Promise<LinkResult> {
   if (!isNetflix(url)) throw new Error("Enlace no válido");
   const local = process.env.CHROME_PATH; // solo para pruebas en tu PC
-  const browser = await puppeteer.launch({
-    args: local ? [] : chromium.args,
-    executablePath: local || (await chromium.executablePath()),
-    headless: local ? true : "shell"
-  });
+  const remote = process.env.BROWSER_WS_ENDPOINT; // opcional: navegador en la nube (Browserless, Browserbase…)
+  let browser;
+  try {
+    browser = remote
+      ? await puppeteer.connect({ browserWSEndpoint: remote })
+      : await puppeteer.launch({ args: local ? [] : chromium.args, executablePath: local || (await chromium.executablePath()), headless: local ? true : "shell" });
+  } catch (e) { throw new Error(`No abrió el navegador: ${(e as Error).message}`); }
   const kill = setTimeout(() => { browser.close().catch(() => {}); }, 50_000); // tope duro
   try {
     const page = await browser.newPage();
     await page.setUserAgent(UA);
+    await page.evaluateOnNewDocument(() => { Object.defineProperty(navigator, "webdriver", { get: () => undefined }); Object.defineProperty(navigator, "languages", { get: () => ["es-PE", "es", "en"] }); });
     await page.setViewport({ width: 1280, height: 900 });
     await page.setExtraHTTPHeaders({ "Accept-Language": "es-PE,es;q=0.9,en;q=0.8" });
     await page.setRequestInterception(true);
