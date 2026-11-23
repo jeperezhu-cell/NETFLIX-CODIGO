@@ -17,7 +17,7 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
 
   const [r] = await sql`select pr.perms, pr.status, a.status as acc_status, a.email from profiles pr
     join service_accounts a on a.id = pr.account_id where pr.id = ${s.profileId} and a.id = ${s.accountId} and a.access_token = ${token}`;
-  if (!r || r.status !== "active" || r.acc_status !== "active" || r.perms?.[action.key] !== true)
+  if (!r || r.status !== "active" || r.acc_status !== "active" || r.perms?.[action.key] === false)
     return NextResponse.json({ error: "Función no disponible" }, { status: 403 });
 
   const key = `mail:${s.profileId}`;

@@ -1,7 +1,8 @@
 "use client";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Search } from "lucide-react";
+import { Send, Search, Bell } from "lucide-react";
+import { playSound } from "@/lib/sounds";
 
 type Pro = { id: string; client_name: string; profile_name: string; email: string };
 type H = { title: string; body: string; kind: string; push_sent: number; client_name: string; at: string };
@@ -28,7 +29,7 @@ export default function NotificationsManager({ profiles, history }: { profiles: 
     const r = await fetch("/api/admin/notifications", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ title, message: msg, profileIds: [...sel] }) });
     const j = await r.json(); setBusy(false);
     if (!r.ok) return setOut(j.error);
-    setOut(`Enviado a ${j.delivered} cliente(s). Push entregados: ${j.pushed}. Omitidos por preferencias: ${j.skipped}.`); setSel(new Set()); router.refresh();
+    playSound("sent"); setOut(`Enviado a ${j.delivered} cliente(s). Push entregados: ${j.pushed}. Omitidos por preferencias: ${j.skipped}.`); setSel(new Set()); router.refresh();
   }
 
   return (
@@ -59,7 +60,9 @@ export default function NotificationsManager({ profiles, history }: { profiles: 
           <input className="field" placeholder="Título" value={title} onChange={(e) => setTitle(e.target.value)} />
           <textarea className="field min-h-32" value={msg} onChange={(e) => setMsg(e.target.value)} />
           <div className="flex flex-wrap gap-2">{VARS.map((v) => <button key={v} type="button" className="btn-ghost !px-3 !py-1.5 font-mono" onClick={() => setMsg((m) => m + " " + v)}>{v}</button>)}</div>
-          <div className="rounded-lg border border-blood/40 bg-black/50 p-4"><p className="text-xs text-white/50">Vista previa</p><p className="font-semibold">{title || "Título"}</p><p className="text-sm text-white/75">{preview}</p></div>
+          <div className="rounded-3xl border border-white/10 bg-gradient-to-b from-[#1a1a1d] to-black p-4"><p className="mb-2 text-center text-[11px] uppercase tracking-widest text-white/40">Así se verá en el celular</p>
+            <div className="flex gap-3 rounded-2xl border border-white/10 bg-white/10 p-3 backdrop-blur"><span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blood text-white"><Bell size={18} /></span>
+              <div className="min-w-0"><p className="text-[11px] text-white/50">ITACHI PERÚ · ahora</p><p className="truncate text-sm font-semibold">📢 {title || "Título"}</p><p className="text-xs text-white/75">{preview}</p></div></div></div>
           {out && <p role="status" className="text-sm text-white/80">{out}</p>}
           <button className="btn w-full" disabled={busy || sel.size === 0 || !title || !msg} onClick={send}><Send size={16} />{busy ? "Enviando…" : "Enviar notificación"}</button>
         </section>

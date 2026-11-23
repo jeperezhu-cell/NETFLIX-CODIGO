@@ -1,4 +1,4 @@
-import * as webpush from "web-push";
+import webpush from "web-push";
 import { sql } from "./db";
 import { render, fmtDate } from "./templates";
 
@@ -25,7 +25,8 @@ export async function notifyProfile(profileId: string, kind: keyof typeof CAT, t
   let sent = 0;
   if (init()) {
     const subs = await sql`select id, endpoint, p256dh, auth from push_subscriptions where profile_id = ${profileId}`;
-    const payload = JSON.stringify({ title: t, body, url: `/c/${p.access_token}/panel`, icon: "/icon-192.png" });
+    const EMO = { payment: "💳", admin: "📢", general: "🔔" } as const;
+    const payload = JSON.stringify({ tag: `n-${profileId}`, title: `${EMO[kind]} ${t}`, body, url: `/c/${p.access_token}/panel`, icon: "/icon-192.png" });
     for (const s of subs) {
       try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload); sent++; }
       catch (e) { const code = (e as { statusCode?: number }).statusCode; if (code === 404 || code === 410) await sql`delete from push_subscriptions where id = ${s.id}`; }
