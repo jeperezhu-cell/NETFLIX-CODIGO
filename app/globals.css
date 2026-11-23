@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+html, body { background: #050404; color: #f3efec; }
+body { font-family: var(--font-body), system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+::selection { background: #e10613; color: #fff; }
+
+@layer components {
+  .field { @apply w-full rounded-md border border-white/15 bg-black/60 px-4 py-3 text-bone placeholder:text-white/35 outline-none transition focus:border-blood focus:ring-2 focus:ring-blood/40; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-md bg-blood px-5 py-3 font-semibold text-white shadow-ember transition hover:bg-blood-glow focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-40; }
+  .btn-ghost { @apply inline-flex items-center justify-center gap-2 rounded-md border border-white/20 px-4 py-2.5 text-sm text-bone transition hover:border-blood hover:text-white; }
+  .panel { @apply rounded-xl border border-white/10 bg-coal/80 backdrop-blur; }
+}
+
+@keyframes sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.hero-sweep::after { content: ""; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 40%, rgba(255,40,50,.18) 50%, transparent 60%); animation: sweep 2.4s ease-out 1; pointer-events: none; }
+@media (prefers-reduced-motion: reduce) { .hero-sweep::after { animation: none; } }
