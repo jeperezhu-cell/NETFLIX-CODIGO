@@ -27,9 +27,11 @@ export async function POST(req: Request, ctx: { params: Promise<{ token: string 
   try {
     const found = await findForAccount(r.email, action.key);
     await sql`insert into audit_logs (actor, action, detail) values (${"client:" + s.profileId}, 'mail.lookup', ${JSON.stringify({ key: action.key, result: found.type })})`;
-    // LINK HOGAR y CÓDIGO HOGAR (6): el cliente NO recibe el link; solo se le avisa que está listo.
-    // El servidor lo abre y pulsa el botón de Netflix en /household.
-    if (found.type === "link") return NextResponse.json({ type: "ready", mode: action.key === "btn_link" ? "confirm" : "getcode", at: found.at });
+    // LINK HOGAR: la confirmación debe hacerse desde la RED DEL CLIENTE (su IP), por eso el link se abre en SU dispositivo.
+    // No se muestra como texto: solo se entrega al botón "PRESIONA PARA ACTUALIZAR HOGAR".
+    if (found.type === "link" && action.key === "btn_link") return NextResponse.json({ type: "ready", mode: "confirm", url: found.value, at: found.at });
+    // CÓDIGO HOGAR (6): el servidor abre el enlace y lee el código; el cliente no ve el link.
+    if (found.type === "link") return NextResponse.json({ type: "ready", mode: "getcode", at: found.at });
     return NextResponse.json(found);
   } catch {
     return NextResponse.json({ error: "No se pudo consultar el correo. Intenta de nuevo." }, { status: 502 });

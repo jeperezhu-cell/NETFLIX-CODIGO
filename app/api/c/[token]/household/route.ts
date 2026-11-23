@@ -8,35 +8,45 @@ import { tooMany, registerFail } from "@/lib/ratelimit";
 
 export const maxDuration = 60;
 
-/** El cliente pulsa "ACTUALIZAR HOGAR": el servidor busca el link en el correo, lo abre y pulsa el botón de Netflix. */
+/**
+ *  mode "check"   → ¿Netflix ya envió el correo "Se ha confirmado tu Hogar"? (el cliente confirmó desde SU red)
+ *  mode "getcode" → el servidor abre el enlace "Obtener código" y lee el código (no depende de la IP del cliente)
+ */
 export async function POST(req: Request, ctx: { params: Promise<{ token: string }> }) {
   const { token } = await ctx.params;
   const s = await getClient();
-  const p = z.object({ mode: z.enum(["confirm", "getcode"]) }).safeParse(await req.json().catch(() => null));
+  const p = z.object({ mode: z.enum(["check", "getcode"]) }).safeParse(await req.json().catch(() => null));
   if (!s || s.stage !== "full" || !s.profileId || !p.success) return NextResponse.json({ error: "No autorizado" }, { status: 401 });
-  const key = p.data.mode === "confirm" ? "btn_link" : "btn_code6";
+  const permKey = p.data.mode === "check" ? "btn_link" : "btn_code6";
 
   const [r] = await sql`select pr.perms, pr.status, a.status as acc_status, a.email from profiles pr
     join service_accounts a on a.id = pr.account_id where pr.id = ${s.profileId} and a.id = ${s.accountId} and a.access_token = ${token}`;
-  if (!r || r.status !== "active" || r.acc_status !== "active" || r.perms?.[key] === false)
+  if (!r || r.status !== "active" || r.acc_status !== "active" || r.perms?.[permKey] === false)
     return NextResponse.json({ error: "Función no disponible" }, { status: 403 });
 
-  const rl = `hh:${s.profileId}`;
-  if (await tooMany(rl, 10)) return NextResponse.json({ error: "Demasiados intentos. Espera unos minutos." }, { status: 429 });
+  const rl = `${p.data.mode === "check" ? "hhc" : "hh"}:${s.profileId}`;
+  if (await tooMany(rl, p.data.mode === "check" ? 120 : 10)) return NextResponse.json({ error: "Demasiados intentos. Espera unos minutos." }, { status: 429 });
   await registerFail(rl);
 
   try {
+    if (p.data.mode === "check") {
+      const f = await findForAccount(r.email, "household_ok");
+      return NextResponse.json({ type: f.type === "done" ? "done" : "none" });
+    }
     // El enlace SIEMPRE se vuelve a leer del correo en el servidor (nunca viene del navegador del cliente).
-    const found = await findForAccount(r.email, key);
+    const found = await findForAccount(r.email, "btn_code6");
     if (found.type !== "link") return NextResponse.json({ type: "none" });
-    const out = await openNetflixLink(found.value, p.data.mode);
-    await sql`insert into audit_logs (actor, action, detail) values (${"client:" + s.profileId}, 'household.run',
-      ${JSON.stringify({ mode: p.data.mode, status: out.status, debug: out.status === "manual" ? out.debug : undefined })})`;
-    // Si el navegador automático no pudo, se ofrece el enlace como plan B (solo en ese caso).
-    if (out.status === "manual") return NextResponse.json({ type: "manual", value: found.value });
-    return NextResponse.json({ type: out.status, value: out.status === "code" ? out.value : undefined });
-  } catch (e) {
-    await sql`insert into audit_logs (actor, action, detail) values (${"client:" + s.profileId}, 'household.error', ${JSON.stringify({ msg: String((e as Error).message).slice(0, 200) })})`;
-    return NextResponse.json({ error: "No se pudo completar automáticamente. Intenta de nuevo." }, { status: 502 });
+    try {
+      const out = await openNetflixLink(found.value, "getcode");
+      await sql`insert into audit_logs (actor, action, detail) values (${"client:" + s.profileId}, 'household.getcode', ${JSON.stringify({ status: out.status, debug: out.status === "manual" ? out.debug : undefined })})`;
+      if (out.status === "code") return NextResponse.json({ type: "code", value: out.value });
+      if (out.status === "expired") return NextResponse.json({ type: "expired" });
+    } catch (e) {
+      await sql`insert into audit_logs (actor, action, detail) values (${"client:" + s.profileId}, 'household.error', ${JSON.stringify({ msg: String((e as Error).message).slice(0, 300) })})`;
+    }
+    // Plan B: si el navegador automático falla, el cliente lo abre desde su dispositivo
+    return NextResponse.json({ type: "manual", value: found.value });
+  } catch {
+    return NextResponse.json({ error: "No se pudo consultar el correo. Intenta de nuevo." }, { status: 502 });
   }
 }

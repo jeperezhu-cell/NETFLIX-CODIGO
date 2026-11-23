@@ -4,6 +4,7 @@ import { simpleParser } from "mailparser";
 export type Found =
   | { type: "code"; value: string; at: string; digits: number }
   | { type: "link"; value: string; at: string }
+  | { type: "done"; at: string }
   | { type: "none" };
 
 export async function connectIcloud() {
@@ -15,9 +16,9 @@ export async function connectIcloud() {
   return c;
 }
 
-type Kind = "login" | "verify" | "temp" | "household" | "other";
+type Kind = "login" | "verify" | "temp" | "household" | "confirmed" | "other";
 // minutos de vigencia de cada tipo de correo (Netflix: verificación 10, inicio de sesión 15)
-const MAX_MIN: Record<Kind, number> = { login: 15, verify: 10, temp: 15, household: 15, other: 0 };
+const MAX_MIN: Record<Kind, number> = { login: 15, verify: 10, temp: 15, household: 15, confirmed: 30, other: 0 };
 
 const STRICT_HREF = /update-primary-location|account\/travel|travel\/verify|primary-location/i;
 const YES_TEXT = /s[ií],? la envi[eé] yo|actualizar hogar|actualizar|yes,? this was me|update netflix household/i;
@@ -35,6 +36,8 @@ function links(html: string, text: string) {
 }
 
 function classify(subject: string, text: string, ls: { href: string }[]): Kind {
+  // Correo que Netflix envía DESPUÉS de que el cliente pulsó "Confirmar actualización"
+  if (/se ha (confirmado|actualizado) tu hogar|hogar con netflix.*(confirmad|actualizad)|household.*(confirmed|updated)/i.test(subject)) return "confirmed";
   const s = `${subject}\n${text}`.toLowerCase();
   if (/c[oó]digo de inicio de sesi[oó]n|sign-in code|login code/.test(s)) return "login";
   if (/c[oó]digo de verificaci[oó]n|verification code|confirma el cambio/.test(s)) return "verify";
@@ -86,6 +89,10 @@ export async function findForAccount(accountEmail: string, key: string): Promise
       const kind = classify(p.subject ?? "", text, ls);
       if (kind === "other" || Date.now() - m.at.getTime() > MAX_MIN[kind] * 60_000) continue;
       const at = m.at.toISOString();
+
+      // El correo MÁS NUEVO de hogar decide: confirmación = ya está hecho; solicitud = pendiente.
+      if (kind === "confirmed") { if (key === "household_ok") return { type: "done", at }; if (key === "btn_link") return { type: "none" }; continue; }
+      if (key === "household_ok") { if (kind === "household") return { type: "none" }; continue; }
 
       if (key === "btn_login" && kind === "login") { const v = codeOf(text, 4); if (v) return { type: "code", value: v, at, digits: 4 }; }
       if (key === "btn_pin" && kind === "verify") { const v = codeOf(text, 6); if (v) return { type: "code", value: v, at, digits: 6 }; }

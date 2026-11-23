@@ -1,10 +1,10 @@
 "use client";
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { KeyRound, Link2, Hash, ShieldCheck, LogIn, Lock, Copy, Check, ExternalLink, Loader2, MailSearch, Home, CheckCircle2, X, Timer } from "lucide-react";
 
 const ICONS = { KeyRound, Link2, Hash, ShieldCheck, LogIn };
 type A = { key: string; label: string; icon: keyof typeof ICONS; enabled: boolean };
-type R = { key: string; type: "code" | "ready" | "none" | "done" | "manual" | "expired"; value?: string; at?: string; mode?: "confirm" | "getcode" };
+type R = { key: string; type: "code" | "ready" | "none" | "done" | "manual" | "expired"; value?: string; url?: string; at?: string; mode?: "confirm" | "getcode" };
 const HINT: Record<string, string> = { btn_pin: "Vence en 10 minutos", btn_login: "Vence en 15 minutos", btn_code4: "Vence en 15 minutos", btn_code6: "Vence en 15 minutos" };
 const TRIES = 4;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -15,10 +15,29 @@ export default function ActionButtons({ token, actions }: { token: string; actio
   const [err, setErr] = useState(""); const [busy, setBusy] = useState(""); const [res, setRes] = useState<R | null>(null);
   const [ok, setOk] = useState(false); const [attempt, setAttempt] = useState(0); const [working, setWorking] = useState(false);
   const stop = useRef(false);
+  const [opened, setOpened] = useState(false); const [round, setRound] = useState(0); const [waitTimeout, setWaitTimeout] = useState(false); const checking = useRef(false);
+
+  // Después de abrir Netflix (en la red del cliente), esperamos el correo "Se ha confirmado tu Hogar"
+  const check = useCallback(async () => {
+    if (checking.current) return; checking.current = true;
+    try {
+      const r = await post(`/api/c/${token}/household`, { mode: "check" }); const j = await r.json();
+      if (r.ok && j.type === "done") { setRes({ key: "btn_link", type: "done" }); setOpened(false); }
+    } catch { /* se reintenta solo */ } finally { checking.current = false; }
+  }, [token]);
+  useEffect(() => {
+    if (!opened) return;
+    setWaitTimeout(false);
+    const t0 = Date.now();
+    const iv = setInterval(() => { if (Date.now() - t0 > 4 * 60_000) { setWaitTimeout(true); clearInterval(iv); } else check(); }, 8000);
+    const onVis = () => { if (document.visibilityState === "visible") check(); };  // al volver desde la pestaña de Netflix
+    document.addEventListener("visibilitychange", onVis);
+    return () => { clearInterval(iv); document.removeEventListener("visibilitychange", onVis); };
+  }, [opened, check, round]);
 
   // Busca en el correo; si aún no llegó, reintenta solo unos segundos (el cliente no tiene que pulsar varias veces)
   async function run(key: string) {
-    stop.current = false; setErr(""); setRes(null); setBusy(key);
+    stop.current = false; setErr(""); setRes(null); setOpened(false); setBusy(key);
     try {
       for (let i = 1; i <= TRIES && !stop.current; i++) {
         setAttempt(i);
@@ -31,11 +50,11 @@ export default function ActionButtons({ token, actions }: { token: string; actio
     setBusy(""); setAttempt(0);
   }
 
-  // El servidor abre el enlace de Netflix y pulsa el botón; el cliente solo ve el resultado
-  async function household(mode: "confirm" | "getcode", key: string) {
+  // CÓDIGO HOGAR (6): el servidor abre el enlace de Netflix y lee el código
+  async function getCode(key: string) {
     setErr(""); setWorking(true);
     try {
-      const r = await post(`/api/c/${token}/household`, { mode }); const j = await r.json();
+      const r = await post(`/api/c/${token}/household`, { mode: "getcode" }); const j = await r.json();
       if (!r.ok) setErr(j.error); else setRes({ ...j, key });
     } catch { setErr("Sin conexión. Intenta de nuevo."); }
     setWorking(false);
@@ -77,13 +96,40 @@ export default function ActionButtons({ token, actions }: { token: string; actio
         </div>
       )}
 
-      {res?.type === "ready" && (
+      {res?.type === "ready" && res.mode === "confirm" && !opened && (
         <div className="animate-pop-in rounded-2xl border border-blood bg-black/70 p-6 text-center shadow-glow" aria-live="polite">
           <p className="text-xs font-semibold uppercase tracking-widest text-white/50">Solicitud encontrada · {since(res.at)}</p>
-          <p className="my-3 text-sm text-white/65">{res.mode === "confirm" ? "Ya llegó tu solicitud de Netflix. Pulsa el botón y nosotros la confirmamos por ti." : "Ya llegó tu mensaje de Netflix. Pulsa el botón para ver tu código."}</p>
-          <button className="btn w-full !py-4 text-lg" disabled={working} onClick={() => household(res.mode ?? "confirm", res.key)}>
-            {working ? <Loader2 size={20} className="animate-spin" /> : <Home size={20} />}
-            {working ? "Procesando… no cierres esta pantalla" : res.mode === "confirm" ? "PRESIONA PARA ACTUALIZAR HOGAR" : "PRESIONA PARA OBTENER EL CÓDIGO"}
+          <p className="my-3 text-sm text-white/65">Ya llegó tu solicitud de Netflix. Pulsa el botón: se abrirá Netflix en tu dispositivo.</p>
+          <a className="btn w-full !py-4 text-lg" href={res.url} target="_blank" rel="noopener noreferrer" onClick={() => setOpened(true)}>
+            <Home size={20} />PRESIONA PARA ACTUALIZAR HOGAR
+          </a>
+          <p className="mt-3 text-xs text-white/45">Hazlo conectado al WiFi de tu casa (el mismo de tu TV), no con datos móviles.</p>
+        </div>
+      )}
+
+      {res?.type === "ready" && res.mode === "confirm" && opened && (
+        <div className="animate-pop-in rounded-2xl border border-blood bg-black/70 p-6 text-center shadow-glow" aria-live="polite">
+          <p className="text-lg font-bold">Último paso en Netflix</p>
+          <p className="my-3 text-sm text-white/70">En la página de Netflix que se abrió, pulsa el botón negro <b className="text-white">«Confirmar actualización»</b> y vuelve aquí.</p>
+          {!waitTimeout ? (
+            <p className="flex items-center justify-center gap-2 text-sm text-white/55"><Loader2 size={16} className="animate-spin text-blood" />Esperando la confirmación de Netflix…</p>
+          ) : (
+            <p className="text-sm text-amber-200">Todavía no vemos la confirmación. Si ya pulsaste el botón, espera un momento y revisa; si no, ábrelo de nuevo.</p>
+          )}
+          <div className="mt-4 flex flex-wrap justify-center gap-2">
+            <button className="btn-ghost" onClick={() => { setRound((n) => n + 1); check(); }}><MailSearch size={16} />Revisar ahora</button>
+            <a className="btn-ghost" href={res.url} target="_blank" rel="noopener noreferrer"><ExternalLink size={16} />Abrir Netflix de nuevo</a>
+          </div>
+        </div>
+      )}
+
+      {res?.type === "ready" && res.mode === "getcode" && (
+        <div className="animate-pop-in rounded-2xl border border-blood bg-black/70 p-6 text-center shadow-glow" aria-live="polite">
+          <p className="text-xs font-semibold uppercase tracking-widest text-white/50">Mensaje encontrado · {since(res.at)}</p>
+          <p className="my-3 text-sm text-white/65">Ya llegó tu mensaje de Netflix. Pulsa el botón para ver tu código.</p>
+          <button className="btn w-full !py-4 text-lg" disabled={working} onClick={() => getCode(res.key)}>
+            {working ? <Loader2 size={20} className="animate-spin" /> : <ShieldCheck size={20} />}
+            {working ? "Obteniendo código…" : "PRESIONA PARA OBTENER EL CÓDIGO"}
           </button>
           {working && <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-white/45"><Timer size={13} />Puede tardar hasta 30 segundos</p>}
         </div>
@@ -99,7 +145,7 @@ export default function ActionButtons({ token, actions }: { token: string; actio
 
       {res?.type === "manual" && (
         <div className="animate-pop-in rounded-2xl border border-white/15 bg-black/60 p-5 text-center" aria-live="polite">
-          <p className="text-sm text-white/70">No se pudo confirmar automáticamente. Ábrelo desde el mismo dispositivo donde lo pediste y pulsa el botón negro.</p>
+          <p className="text-sm text-white/70">No se pudo obtener automáticamente. Ábrelo desde tu dispositivo y sigue las indicaciones de Netflix.</p>
           <a className="btn mt-4" href={res.value} target="_blank" rel="noopener noreferrer"><ExternalLink size={18} />Abrir enlace de Netflix</a>
         </div>
       )}
